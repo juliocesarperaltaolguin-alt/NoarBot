@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoarBot Pro Max</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="app">
+    <header>
+        <div class="logo">N</div>
+        <div>
+            <h1>NOARBOT PRO MAX</h1>
+            <p>Asistente inteligente en Python</p>
+        </div>
+
+        <div class="acciones">
+            <button onclick="cambiarTema()">Tema</button>
+            <button onclick="limpiarChat()">Limpiar</button>
+        </div>
+    </header>
+
+    <main id="chat" class="chat"></main>
+
+    <div id="typing" class="typing">
+        <span>NoarBot está escribiendo</span>
+        <div class="dots">
+            <span></span><span></span><span></span>
+        </div>
+    </div>
+
+    <section class="barra">
+        <input id="mensaje" type="text" placeholder="Escribe un mensaje..." autocomplete="off">
+        <button onclick="enviar()">Enviar</button>
+    </section>
+</div>
+
+<script>
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("mensaje");
+    const typing = document.getElementById("typing");
+
+    function horaActual() {
+        const ahora = new Date();
+        return ahora.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+    }
+
+    function formato(texto) {
+        return texto.replace(/\n/g, "<br>");
+    }
+
+    function agregarMensaje(tipo, texto, guardar = true) {
+        const clase = tipo === "user" ? "user" : "bot";
+        const nombre = tipo === "user" ? "Tú" : "NoarBot";
+        const avatar = tipo === "bot" ? `<div class="avatar">N</div>` : "";
+
+        chat.innerHTML += `
+            <div class="fila ${clase}">
+                ${avatar}
+                <div class="mensaje">
+                    <div class="nombre ${tipo === "user" ? "user-name" : ""}">${nombre}</div>
+                    <div class="burbuja">${formato(texto)}</div>
+                    <div class="hora">${horaActual()}</div>
+                </div>
+            </div>
+        `;
+
+        chat.scrollTop = chat.scrollHeight;
+
+        if (guardar) {
+            let historial = JSON.parse(localStorage.getItem("historialNoarBot")) || [];
+            historial.push({tipo, texto});
+            localStorage.setItem("historialNoarBot", JSON.stringify(historial));
+        }
+    }
+
+    function cargarHistorial() {
+        const historial = JSON.parse(localStorage.getItem("historialNoarBot")) || [];
+
+        if (historial.length === 0) {
+            agregarMensaje("bot", "Bienvenido. ¿En qué te ayudo?", true);
+        } else {
+            historial.forEach(m => agregarMensaje(m.tipo, m.texto, false));
+        }
+    }
+
+    async function enviar() {
+        const texto = input.value.trim();
+        if (texto === "") return;
+
+        agregarMensaje("user", texto);
+        input.value = "";
+        input.focus();
+
+        typing.style.display = "flex";
+
+        try {
+            const respuesta = await fetch("/chat", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({mensaje: texto})
+            });
+
+            const datos = await respuesta.json();
+
+            setTimeout(() => {
+                typing.style.display = "none";
+                agregarMensaje("bot", datos.respuesta);
+            }, 500);
+
+        } catch {
+            typing.style.display = "none";
+            agregarMensaje("bot", "No pude conectarme con el servidor.");
+        }
+    }
+
+    function limpiarChat() {
+        localStorage.removeItem("historialNoarBot");
+        chat.innerHTML = "";
+        agregarMensaje("bot", "Chat limpiado. ¿En qué te ayudo?");
+    }
+
+    function cambiarTema() {
+        document.body.classList.toggle("light");
+        localStorage.setItem("temaNoarBot", document.body.classList.contains("light") ? "light" : "dark");
+    }
+
+    input.addEventListener("keydown", function(event) {
+        if (event.key === "Enter") enviar();
+    });
+
+    if (localStorage.getItem("temaNoarBot") === "light") {
+        document.body.classList.add("light");
+    }
+
+    cargarHistorial();
+</script>
+
+</body>
+</html>
